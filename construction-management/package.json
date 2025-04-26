@@ -3,18 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.2",
-    "@stackframe/stack": "^2.7.29",
+    "@stackframe/stack": "^2.7.28",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.21.0",
-    "jspdf": "^3.0.1",
     "lucide-react": "^0.483.0",
     "next": "15.2.3",
     "react": "^18.0.0",

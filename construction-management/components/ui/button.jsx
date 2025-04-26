@@ -1,7 +1,6 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva } from "class-variance-authority";
-import TimberForm from "@/app/timber/timber-form/page";
 
 import { cn } from "@/lib/utils"
 
@@ -51,7 +50,6 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props} />
   );
-  router.push(`/timber/timber-form?${queryParams}`);
 }
 
 export { Button, buttonVariants }
