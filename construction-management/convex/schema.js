@@ -7,5 +7,39 @@ export default defineSchema({
     email: v.string(),
     createdAt: v.number(),
   }),
+<<<<<<< HEAD
   
+=======
+
+  timber: defineTable({
+    timberType: v.string(),
+    receivedDate: v.string(),
+    length: v.number(),
+    width: v.number(),
+    height: v.number(),
+    costPerUnit: v.number(),
+    quantity: v.number(),
+    totalCost: v.number(),
+    quality: v.string(),
+    receivingWay: v.string(),
+    company: v.string(),
+    characteristics: v.string(),
+    sellingPrice: v.number(),
+    discountRate: v.number(),
+    buyerName: v.string(),
+    buyerContact: v.string(),
+    finalCost: v.number(),
+    createdAt: v.number(),
+  }),
+  
+  feedback: defineTable({
+    buyerName: v.string(),
+    buyerContact: v.string(),
+    timberType: v.string(),
+    quantity: v.number(),
+    rating: v.number(),
+    comment: v.string(),
+  }),
+    
+>>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
 });
