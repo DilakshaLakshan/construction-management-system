@@ -16,6 +16,7 @@ import type {
 import type * as feedback from "../feedback.js";
 import type * as sellTimbet from "../sellTimbet.js";
 import type * as timber from "../timber.js";
+import type * as users from "../users.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   feedback: typeof feedback;
   sellTimbet: typeof sellTimbet;
   timber: typeof timber;
+  users: typeof users;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
