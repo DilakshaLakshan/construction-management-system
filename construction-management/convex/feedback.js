@@ -1,35 +1,26 @@
-import { mutation, query } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-// Add feedback
 export const addFeedback = mutation({
   args: {
     timberType: v.string(),
     rating: v.number(),
     comment: v.string(),
+    quantity: v.number(),
+    buyerName: v.optional(v.string()),
+    buyerContact: v.optional(v.string())
   },
   handler: async (ctx, args) => {
-    const feedbackData = await ctx.db.query("feedback", args)
-    .filter(q=>q.eq(q.field("buyerName"), args.buyerName))
-    .collect();
-
-    if (feedbackData.length==0) 
-    {
-      const data = {
-        timberType: args.timberType,
-        rating: args.rating,
-        comment: args.comment
-      }
-      const result = await ctx.db.insert("feedback", {
-        ...data,
-      });
-      console.log(result);
-      return result;
-      
+    // Insert all provided data at once
+    const result = await ctx.db.insert("feedback", {
+      timberType: args.timberType,
+      rating: args.rating,
+      comment: args.comment,
+      quantity: args.quantity,
+      buyerName: args.buyerName,
+      buyerContact: args.buyerContact
+    });
     
-    }
-
-    return feedbackData[0]
+    return result; // Returns the new document ID
   }
 });
-
