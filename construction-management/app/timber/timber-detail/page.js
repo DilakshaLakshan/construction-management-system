@@ -7,11 +7,8 @@ export default function TimberDetails() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [timberData, setTimberData] = useState(null);
-<<<<<<< HEAD
-=======
-  
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
 
+  
   // Fetch timber data from query parameters or API
   useEffect(() => {
     const queryData = {};

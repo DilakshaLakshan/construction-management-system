@@ -1,25 +1,4 @@
 "use client";
-<<<<<<< HEAD
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-
-export default function SellTimberForm() {
-  const router = useRouter();
-
-  // Initial form data
-  const initialFormData = {
-    timberType: "",
-    quantity: 0,
-    length: 0,
-    width: 0,
-    height: 0,
-    sellingPrice: 0,
-    discountRate: 0, // Discount rate in percentage
-    buyerName: "",
-    buyerContact: "",
-    totalCost: 0,
-    finalCost: 0, // Final cost after discount
-=======
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -46,16 +25,10 @@ export default function SellTimberForm() {
     buyerName: "",
     buyerContact: "",
     finalCost: 0
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
   };
 
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({});
-<<<<<<< HEAD
-
-  // Timber type options
-  const timberTypeOptions = ["Teak", "Mahogany", "Oak", "Pine", "Cedar", "Spruce"];
-=======
   const [isUpdateMode, setIsUpdateMode] = useState(false);
 
   // Options for dropdowns
@@ -95,25 +68,11 @@ export default function SellTimberForm() {
       });
     }
   }, [searchParams]);
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
 
   // Validate form data
   const validate = () => {
     let newErrors = {};
     if (!formData.timberType) newErrors.timberType = "Required";
-<<<<<<< HEAD
-    if (!formData.quantity || formData.quantity <= 0) newErrors.quantity = "Enter a valid quantity";
-    if (!formData.length || formData.length <= 0) newErrors.length = "Enter a valid length";
-    if (!formData.width || formData.width <= 0) newErrors.width = "Enter a valid width";
-    if (!formData.height || formData.height <= 0) newErrors.height = "Enter a valid height";
-    if (!formData.sellingPrice || formData.sellingPrice <= 0)
-      newErrors.sellingPrice = "Enter a valid selling price";
-    if (formData.discountRate < 0 || formData.discountRate > 100)
-      newErrors.discountRate = "Discount rate must be between 0 and 100";
-    if (!formData.buyerName) newErrors.buyerName = "Required";
-    if (!formData.buyerContact || !/^\d{10}$/.test(formData.buyerContact))
-      newErrors.buyerContact = "Enter a valid 10-digit contact number";
-=======
     if (!formData.receivedDate) newErrors.receivedDate = "Required";
     if (!formData.quantity || formData.quantity <= 0) newErrors.quantity = "Enter valid quantity";
     if (!formData.length || formData.length <= 0) newErrors.length = "Enter valid length";
@@ -126,33 +85,11 @@ export default function SellTimberForm() {
     if (formData.discountRate < 0 || formData.discountRate > 100) newErrors.discountRate = "Must be 0-100";
     if (!formData.buyerName) newErrors.buyerName = "Required";
     if (!formData.buyerContact || !/^\d{10}$/.test(formData.buyerContact)) newErrors.buyerContact = "Enter valid 10-digit number";
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-<<<<<<< HEAD
-  // Calculate volume and total cost
-  const calculateCosts = () => {
-    const { length, width, height, quantity, sellingPrice, discountRate } = formData;
-
-    // Calculate volume
-    const volume = length * width * height * quantity;
-
-    // Calculate total cost
-    const totalCost = volume * sellingPrice;
-
-    // Calculate final cost after discount
-    const finalCost = totalCost - totalCost * (discountRate / 100);
-
-    setFormData((prev) => ({
-      ...prev,
-      totalCost: totalCost.toFixed(2),
-      finalCost: finalCost.toFixed(2),
-    }));
-  };
-=======
   // Calculate costs when relevant fields change
   useEffect(() => {
     const volume = formData.length * formData.width * formData.height * formData.quantity;
@@ -165,22 +102,12 @@ export default function SellTimberForm() {
       finalCost: parseFloat(finalCost.toFixed(2))
     }));
   }, [formData.length, formData.width, formData.height, formData.quantity, formData.sellingPrice, formData.discountRate]);
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
 
   // Handle form submission
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
 
-<<<<<<< HEAD
-    // Simulate API call for selling timber
-    console.log("Selling Timber Data:", formData);
-    alert("Timber sold successfully!");
-
-    // Redirect to sell-details page with query parameters
-    const queryParams = new URLSearchParams(formData).toString();
-    router.push(`/timber/sell-timber/sell-details?${queryParams}`);
-=======
     if (isUpdateMode) {
       console.log("Updating timber:", formData);
       alert("Timber details updated successfully!");
@@ -195,34 +122,20 @@ export default function SellTimberForm() {
       queryParams.append(key, value.toString());
     }
     router.push(`/timber/sell-timber/sell-details?${queryParams.toString()}`);
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
   };
 
   // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
-<<<<<<< HEAD
-    setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Recalculate costs if relevant fields change
-    if (["length", "width", "height", "quantity", "sellingPrice", "discountRate"].includes(name)) {
-      calculateCosts();
-    }
-=======
     setFormData(prev => ({ ...prev, [name]: value }));
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#191A19] p-6">
       <div className="max-w-4xl w-full bg-[#FFFFFF] shadow-xl rounded-lg border border-[#FF7420] p-8">
-<<<<<<< HEAD
-        <h2 className="text-2xl font-bold text-[#FF7420] border-b pb-4 mb-6">Sell Timber</h2>
-=======
         <h2 className="text-2xl font-bold text-[#FF7420] border-b pb-4 mb-6">
           {isUpdateMode ? "Update Timber Details" : "Sell New Timber"}
         </h2>
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Timber Type */}
@@ -233,38 +146,16 @@ export default function SellTimberForm() {
               value={formData.timberType}
               onChange={handleChange}
               className="w-full p-2 border rounded-md text-[#191A19]"
-<<<<<<< HEAD
-            >
-              <option value="">Select Timber Type</option>
-              {timberTypeOptions.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-=======
               required
             >
               <option value="">Select Timber Type</option>
               {timberTypeOptions.map(type => (
                 <option key={type} value={type}>{type}</option>
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
               ))}
             </select>
             {errors.timberType && <p className="text-red-500 text-sm">{errors.timberType}</p>}
           </div>
 
-<<<<<<< HEAD
-          {/* Quantity */}
-          <div>
-            <label className="block font-medium text-[#191A19]">Quantity</label>
-            <input
-              type="number"
-              name="quantity"
-              value={formData.quantity}
-              onChange={handleChange}
-              className="w-full p-2 border rounded-md text-[#191A19]"
-            />
-            {errors.quantity && <p className="text-red-500 text-sm">{errors.quantity}</p>}
-=======
           {/* Received Date */}
           <div>
             <label className="block font-medium text-[#191A19]">Received Date</label>
@@ -277,7 +168,6 @@ export default function SellTimberForm() {
               required
             />
             {errors.receivedDate && <p className="text-red-500 text-sm">{errors.receivedDate}</p>}
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
           </div>
 
           {/* Dimensions */}
@@ -290,12 +180,9 @@ export default function SellTimberForm() {
                 value={formData.length}
                 onChange={handleChange}
                 className="w-full p-2 border rounded-md text-[#191A19]"
-<<<<<<< HEAD
-=======
                 min="0"
                 step="0.01"
                 required
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
               />
               {errors.length && <p className="text-red-500 text-sm">{errors.length}</p>}
             </div>
@@ -307,12 +194,9 @@ export default function SellTimberForm() {
                 value={formData.width}
                 onChange={handleChange}
                 className="w-full p-2 border rounded-md text-[#191A19]"
-<<<<<<< HEAD
-=======
                 min="0"
                 step="0.01"
                 required
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
               />
               {errors.width && <p className="text-red-500 text-sm">{errors.width}</p>}
             </div>
@@ -324,19 +208,14 @@ export default function SellTimberForm() {
                 value={formData.height}
                 onChange={handleChange}
                 className="w-full p-2 border rounded-md text-[#191A19]"
-<<<<<<< HEAD
-=======
                 min="0"
                 step="0.01"
                 required
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
               />
               {errors.height && <p className="text-red-500 text-sm">{errors.height}</p>}
             </div>
           </div>
 
-<<<<<<< HEAD
-=======
           {/* Cost and Quantity */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -428,7 +307,6 @@ export default function SellTimberForm() {
             />
           </div>
 
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
           {/* Selling Price */}
           <div>
             <label className="block font-medium text-[#191A19]">Selling Price (per m³)</label>
@@ -438,12 +316,9 @@ export default function SellTimberForm() {
               value={formData.sellingPrice}
               onChange={handleChange}
               className="w-full p-2 border rounded-md text-[#191A19]"
-<<<<<<< HEAD
-=======
               min="0"
               step="0.01"
               required
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
             />
             {errors.sellingPrice && <p className="text-red-500 text-sm">{errors.sellingPrice}</p>}
           </div>
@@ -457,11 +332,8 @@ export default function SellTimberForm() {
               value={formData.discountRate}
               onChange={handleChange}
               className="w-full p-2 border rounded-md text-[#191A19]"
-<<<<<<< HEAD
-=======
               min="0"
               max="100"
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
             />
             {errors.discountRate && <p className="text-red-500 text-sm">{errors.discountRate}</p>}
           </div>
@@ -475,10 +347,7 @@ export default function SellTimberForm() {
               value={formData.buyerName}
               onChange={handleChange}
               className="w-full p-2 border rounded-md text-[#191A19]"
-<<<<<<< HEAD
-=======
               required
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
             />
             {errors.buyerName && <p className="text-red-500 text-sm">{errors.buyerName}</p>}
           </div>
@@ -491,37 +360,12 @@ export default function SellTimberForm() {
               value={formData.buyerContact}
               onChange={handleChange}
               className="w-full p-2 border rounded-md text-[#191A19]"
-<<<<<<< HEAD
-=======
               required
               pattern="\d{10}"
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
             />
             {errors.buyerContact && <p className="text-red-500 text-sm">{errors.buyerContact}</p>}
           </div>
 
-<<<<<<< HEAD
-          {/* Total Cost */}
-          <div>
-            <label className="block font-medium text-[#191A19]">Total Cost</label>
-            <input
-              type="text"
-              value={`Rupee ${formData.totalCost}`}
-              readOnly
-              className="w-full p-2 border rounded-md bg-gray-100 text-[#191A19]"
-            />
-          </div>
-
-          {/* Final Cost */}
-          <div>
-            <label className="block font-medium text-[#191A19]">Final Cost (After Discount)</label>
-            <input
-              type="text"
-              value={`Rupee ${formData.finalCost}`}
-              readOnly
-              className="w-full p-2 border rounded-md bg-gray-100 text-[#191A19]"
-            />
-=======
           {/* Calculated Costs */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -542,7 +386,6 @@ export default function SellTimberForm() {
                 className="w-full p-2 border rounded-md bg-gray-100 text-[#191A19]"
               />
             </div>
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
           </div>
 
           {/* Submit Button */}
@@ -551,11 +394,7 @@ export default function SellTimberForm() {
               type="submit"
               className="px-4 py-2 bg-[#FF7420] text-white rounded-md hover:bg-[#FF7420]/90"
             >
-<<<<<<< HEAD
-              Sell Timber
-=======
               {isUpdateMode ? "Update Timber" : "Sell Timber"}
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
             </button>
           </div>
         </form>
