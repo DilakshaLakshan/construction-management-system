@@ -36,6 +36,6 @@ export default defineSchema({
     quantity: v.optional(v.number()),
     rating: v.number(),
     comment: v.string(),
-  }),
+  })
     
 });
