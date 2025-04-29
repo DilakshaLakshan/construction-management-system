@@ -10,19 +10,12 @@
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.2",
-<<<<<<< HEAD
     "@radix-ui/react-tabs": "^1.1.3",
     "@stackframe/stack": "^2.7.30",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.21.0",
     "framer-motion": "^12.5.0",
-=======
-    "@stackframe/stack": "^2.7.29",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "convex": "^1.21.0",
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
     "jspdf": "^3.0.1",
     "lucide-react": "^0.483.0",
     "next": "15.2.3",

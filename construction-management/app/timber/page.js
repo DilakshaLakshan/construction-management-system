@@ -124,21 +124,13 @@ export default function TimberHome() {
       id: 1,
       title: "Premium Teak Furniture",
       description: "Crafted from the finest teak wood, our premium furniture is durable and perfect for outdoor use.",
-<<<<<<< HEAD
-      image: "/images/teak-furniture.jpg", // Replace with actual image path
-=======
       image: "/img/teak.jpeg", // Replace with actual image path
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
     },
     {
       id: 2,
       title: "Elegant Mahogany Decor",
       description: "Our mahogany products are known for their rich color and fine grain, ideal for decorative items.",
-<<<<<<< HEAD
-      image: "/images/mahogany-decor.jpg", // Replace with actual image path
-=======
       image: "/img/mahogani.jpg", // Replace with actual image path
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
     },
     {
       id: 3,
