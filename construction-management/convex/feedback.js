@@ -17,7 +17,7 @@ export const addFeedback = mutation({
     {
       const data = {
         timberType: args.timberType,
-        rating: 5,
+        rating: args.rating,
         comment: args.comment
       }
       const result = await ctx.db.insert("feedback", {
