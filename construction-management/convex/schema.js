@@ -7,9 +7,6 @@ export default defineSchema({
     email: v.string(),
     createdAt: v.number(),
   }),
-<<<<<<< HEAD
-  
-=======
 
   timber: defineTable({
     timberType: v.string(),
@@ -41,5 +38,4 @@ export default defineSchema({
     comment: v.string(),
   }),
     
->>>>>>> fe2f38cc82e65fda7db2bee98c04649d8a64badf
 });
