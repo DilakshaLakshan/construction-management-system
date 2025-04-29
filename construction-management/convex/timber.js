@@ -37,8 +37,12 @@ export const getTimber = query({
 
 // Get timber by ID
 export const getTimberById = query({
-  args: { id: v.id("timber") },
+  args: { id: v.optional(v.id("timber")) },
   handler: async (ctx, args) => {
+    if (!args.id) {
+      // Handle case when no ID is provided
+      return null; // or return all timber, or whatever makes sense
+    }
     return await ctx.db.get(args.id);
   },
 });

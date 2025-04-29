@@ -30,12 +30,12 @@ export default defineSchema({
   }),
   
   feedback: defineTable({
-    buyerName: v.string(),
-    buyerContact: v.string(),
+    buyerName: v.optional( v. string()),
+    buyerContact: v.optional( v. string()),
     timberType: v.string(),
-    quantity: v.number(),
+    quantity: v.optional(v.number()),
     rating: v.number(),
     comment: v.string(),
-  }),
+  })
     
 });
