@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { UserButton } from '@stackframe/stack';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "/components/ui/tabs.jsx";
 import ClientImage from "/components/ClientImage";
 
@@ -8,7 +7,20 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#FFFFFF]   text-[#191A19]">
       <div className="flex justify-end p-4">
-        <UserButton />
+        <div className="flex gap-4">
+          <Link 
+            href="/auth/login" 
+            className="px-4 py-2 bg-[#FF7420] text-white rounded-lg hover:bg-[#FF7420]/90 transition-colors"
+          >
+            Login
+          </Link>
+          <Link 
+            href="/auth/register" 
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+          >
+            Register
+          </Link>
+        </div>
       </div>
       
       {/* Hero Section */}
