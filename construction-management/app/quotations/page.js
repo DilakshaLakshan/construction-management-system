@@ -1,808 +1,1100 @@
 "use client";
-
-import { useState, useRef } from "react";
-import Image from "next/image";
-import Link from "next/link";
-import { UserButton } from '@stackframe/stack';
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { FiSave, FiDownload, FiList, FiPlus, FiTrash2, FiEdit, FiUpload, FiFile } from "react-icons/fi";
+import jsPDF from "jspdf";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
-// File type icons
-const fileIcons = {
-  "dwg": "/icons/dwg-icon.svg",
-  "dxf": "/icons/dxf-icon.svg",
-  "skp": "/icons/skp-icon.svg",
-  "default": "/icons/cad-icon.svg"
-};
-
-export default function Quotations() {
-  const [dragActive, setDragActive] = useState(false);
-  const [files, setFiles] = useState([]);
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [quotationResult, setQuotationResult] = useState(null);
-  const [currentView, setCurrentView] = useState("upload"); // upload, preview, result
-  const [materialOptions, setMaterialOptions] = useState({
-    woodType: "teak",
-    finishType: "standard",
-    hardwareGrade: "standard"
-  });
-  
+export default function QuotationsPage() {
+  const router = useRouter();
   const fileInputRef = useRef(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(true); // Default to true for development
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("create");
+  const [quotations, setQuotations] = useState([]);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [cadFile, setCadFile] = useState(null);
+  const [cadData, setCadData] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [currentQuotationId, setCurrentQuotationId] = useState(null);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    clientName: "",
+    clientEmail: "",
+    clientPhone: "",
+    projectName: "",
+    projectLocation: "",
+    projectType: "construction", // Default value
+    startDate: "",
+    estimatedCompletionDate: "",
+    description: "",
+    items: [{ description: "", quantity: 1, unitPrice: 0, total: 0 }],
+    subtotal: 0,
+    taxRate: 15, // Default tax rate
+    taxAmount: 0,
+    discount: 0,
+    total: 0,
+    notes: "",
+    terms: "Payment due within 30 days of issue.",
+    cadFileUrl: "",
+    cadFileName: "",
+    cadExtractedQuantities: {}
+  });
 
-  // Handle drag events
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
+  // Validation state
+  const [errors, setErrors] = useState({});
 
-  // Handle drop event
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFiles(e.dataTransfer.files);
-    }
-  };
+  // Fetch saved quotations
+  const fetchQuotations = useQuery(api.quotations?.list) || [];
 
-  // Handle file input change
-  const handleChange = (e) => {
-    e.preventDefault();
-    if (e.target.files && e.target.files[0]) {
-      handleFiles(e.target.files);
-    }
-  };
+  // Mutations
+  const saveQuotation = useMutation(api.quotations?.create);
+  const updateQuotationMutation = useMutation(api.quotations?.update);
+  const deleteQuotation = useMutation(api.quotations?.deleteQuotation);
+  const updateStatus = useMutation(api.quotations?.updateStatus);
 
-  // Process the files
-  const handleFiles = (fileList) => {
-    const newFiles = Array.from(fileList).map(file => {
-      // Get file extension
-      const extension = file.name.split('.').pop().toLowerCase();
-      const isValidFile = ["dwg", "dxf", "skp", "pdf"].includes(extension);
-      
-      return {
-        file,
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        extension,
-        icon: fileIcons[extension] || fileIcons.default,
-        isValid: isValidFile,
-        uploadProgress: 0,
-        status: isValidFile ? "ready" : "invalid"
-      };
-    });
-    
-    setFiles([...files, ...newFiles]);
-    
-    // Automatically move to preview if valid files are uploaded
-    if (newFiles.some(file => file.isValid)) {
-      setCurrentView("preview");
-    }
-  };
-
-  // Remove a file
-  const removeFile = (index) => {
-    const newFiles = [...files];
-    newFiles.splice(index, 1);
-    setFiles(newFiles);
-    
-    // Go back to upload view if no files remain
-    if (newFiles.length === 0) {
-      setCurrentView("upload");
-      setQuotationResult(null);
-    }
-  };
-
-  // Trigger file input click
-  const onButtonClick = () => {
-    fileInputRef.current.click();
-  };
-
-  // Calculate quotation
-  const calculateQuotation = () => {
-    setIsCalculating(true);
-    
-    // Simulate calculation process
-    setTimeout(() => {
-      // Mock calculation result
-      const result = {
-        totalCost: 1250000,
-        breakdown: {
-          materials: 750000,
-          labor: 350000,
-          overhead: 150000
-        },
-        timeline: {
-          estimatedDays: 45,
-          phases: [
-            { name: "Planning", days: 5 },
-            { name: "Foundation", days: 10 },
-            { name: "Structure", days: 15 },
-            { name: "Finishing", days: 15 }
-          ]
-        },
-        materials: {
-          wood: {
-            type: materialOptions.woodType,
-            quantity: "120 cubic feet",
-            cost: 450000
-          },
-          hardware: {
-            type: materialOptions.hardwareGrade,
-            cost: 150000
-          },
-          finish: {
-            type: materialOptions.finishType,
-            cost: 150000
-          }
+  // Check if user is logged in
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      // Validate the token
+      const validateToken = async () => {
+        try {
+          // Mock validation for now
+          setIsLoggedIn(true);
+        } catch (error) {
+          console.error("Error validating token:", error);
+          setIsLoggedIn(false);
+        } finally {
+          setLoading(false);
         }
       };
       
-      setQuotationResult(result);
-      setIsCalculating(false);
-      setCurrentView("result");
-    }, 3000);
+      validateToken();
+    } else {
+      setIsLoggedIn(true); // For development, set to true
+      setLoading(false);
+    }
+  }, []);
+
+  // Load quotations when component mounts
+  useEffect(() => {
+    if (fetchQuotations) {
+      setQuotations(fetchQuotations);
+    }
+  }, [fetchQuotations]);
+
+  // Calculate totals whenever items, tax rate, or discount changes
+  useEffect(() => {
+    calculateTotals();
+  }, [formData.items, formData.taxRate, formData.discount]);
+
+  // Calculate subtotal, tax, and total
+  const calculateTotals = () => {
+    const subtotal = formData.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const taxAmount = (subtotal * formData.taxRate) / 100;
+    const total = subtotal + taxAmount - formData.discount;
+
+    setFormData(prev => ({
+      ...prev,
+      subtotal,
+      taxAmount,
+      total
+    }));
   };
 
-  // Format currency
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-LK', { 
-      style: 'currency', 
-      currency: 'LKR',
-      maximumFractionDigits: 0
-    }).format(amount);
+  // Handle form input changes
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
+
+  // Handle numeric input changes with validation
+  const handleNumericChange = (e) => {
+    const { name, value } = e.target;
+    const numericValue = parseFloat(value) || 0;
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: numericValue
+    }));
+  };
+
+  // Handle item changes
+  const handleItemChange = (index, field, value) => {
+    const updatedItems = [...formData.items];
+    
+    if (field === 'quantity' || field === 'unitPrice') {
+      value = parseFloat(value) || 0;
+      updatedItems[index][field] = value;
+      updatedItems[index].total = updatedItems[index].quantity * updatedItems[index].unitPrice;
+    } else {
+      updatedItems[index][field] = value;
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      items: updatedItems
+    }));
+  };
+
+  // Add new item
+  const addItem = () => {
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, { description: "", quantity: 1, unitPrice: 0, total: 0 }]
+    }));
+  };
+
+  // Remove item
+  const removeItem = (index) => {
+    const updatedItems = formData.items.filter((_, i) => i !== index);
+    setFormData(prev => ({
+      ...prev,
+      items: updatedItems
+    }));
+  };
+
+  // Validate form
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.clientName.trim()) newErrors.clientName = "Client name is required";
+    if (!formData.projectName.trim()) newErrors.projectName = "Project name is required";
+    if (!formData.projectLocation.trim()) newErrors.projectLocation = "Project location is required";
+    if (!formData.startDate) newErrors.startDate = "Start date is required";
+    if (!formData.estimatedCompletionDate) newErrors.estimatedCompletionDate = "Estimated completion date is required";
+    
+    // Validate items
+    if (formData.items.length === 0) {
+      newErrors.items = "At least one item is required";
+    } else {
+      formData.items.forEach((item, index) => {
+        if (!item.description.trim()) {
+          newErrors[`item_${index}_description`] = "Description is required";
+        }
+      });
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Reset form
+  const resetForm = () => {
+    setFormData({
+      clientName: "",
+      clientEmail: "",
+      clientPhone: "",
+      projectName: "",
+      projectLocation: "",
+      projectType: "construction",
+      startDate: "",
+      estimatedCompletionDate: "",
+      description: "",
+      items: [{ description: "", quantity: 1, unitPrice: 0, total: 0 }],
+      subtotal: 0,
+      taxRate: 15,
+      taxAmount: 0,
+      discount: 0,
+      total: 0,
+      notes: "",
+      terms: "Payment due within 30 days of issue.",
+      cadFileUrl: "",
+      cadFileName: "",
+      cadExtractedQuantities: {}
+    });
+    setIsEditMode(false);
+    setCurrentQuotationId(null);
+    setCadFile(null);
+    setCadData(null);
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    try {
+      // Create a copy of the form data without any internal fields
+      const { _creationTime, _id, createdAt, ...quotationData } = formData;
+      
+      if (isEditMode && currentQuotationId) {
+        // Update existing quotation - don't include createdAt
+        await updateQuotationMutation({
+          id: currentQuotationId,
+          ...quotationData
+        });
+        setSuccessMessage("Quotation updated successfully!");
+      } else {
+        // Save new quotation - include createdAt
+        await saveQuotation({
+          ...quotationData,
+          createdAt: new Date().toISOString(),
+          status: "pending"
+        });
+        setSuccessMessage("Quotation created successfully!");
+      }
+      
+      // Show success message
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+      
+      // Reset form and navigate to list
+      resetForm();
+      setActiveTab("list");
+    } catch (error) {
+      console.error("Error saving quotation:", error);
+      alert("Failed to save quotation. Please try again.");
+    }
+  };
+
+  // Handle quotation edit
+  const handleEdit = (quotation) => {
+    setIsEditMode(true);
+    setCurrentQuotationId(quotation._id);
+    
+    // Convert the quotation data to match form structure
+    const editData = {
+      ...quotation,
+      // Ensure items have the correct structure
+      items: quotation.items || [{ description: "", quantity: 1, unitPrice: 0, total: 0 }]
+    };
+    
+    setFormData(editData);
+    setActiveTab("create");
+  };
+
+  // Handle quotation delete
+  const handleDelete = async (id) => {
+    if (confirm("Are you sure you want to delete this quotation?")) {
+      try {
+        await deleteQuotation({ id });
+        setQuotations(quotations.filter(q => q._id !== id));
+        setSuccessMessage("Quotation deleted successfully!");
+        setShowSuccessMessage(true);
+        setTimeout(() => setShowSuccessMessage(false), 3000);
+      } catch (error) {
+        console.error("Error deleting quotation:", error);
+        alert("Failed to delete quotation. Please try again.");
+      }
+    }
+  };
+
+  // Handle status update
+  const handleStatusUpdate = async (id, newStatus) => {
+    try {
+      await updateStatus({ id, status: newStatus });
+      
+      // Update local state
+      setQuotations(quotations.map(q => 
+        q._id === id ? { ...q, status: newStatus } : q
+      ));
+      
+      setSuccessMessage(`Quotation status updated to ${newStatus}!`);
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+    } catch (error) {
+      console.error("Error updating status:", error);
+      alert("Failed to update status. Please try again.");
+    }
+  };
+
+  // Generate PDF
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    
+    // Add company logo/header
+    doc.setFontSize(20);
+    doc.setTextColor(255, 116, 32); // #FF7420
+    doc.text("Vithanage Group", 105, 20, { align: "center" });
+    
+    doc.setFontSize(14);
+    doc.setTextColor(25, 26, 25); // #191A19
+    doc.text("QUOTATION", 105, 30, { align: "center" });
+    
+    // Add quotation details
+    doc.setFontSize(10);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 40);
+    doc.text(`Quotation #: Q-${Math.floor(Math.random() * 10000)}`, 20, 45);
+    
+    // Client information
+    doc.setFontSize(12);
+    doc.text("Client Information:", 20, 55);
+    doc.setFontSize(10);
+    doc.text(`Name: ${formData.clientName}`, 20, 60);
+    doc.text(`Email: ${formData.clientEmail}`, 20, 65);
+    doc.text(`Phone: ${formData.clientPhone}`, 20, 70);
+    
+    // Project information
+    doc.setFontSize(12);
+    doc.text("Project Details:", 120, 55);
+    doc.setFontSize(10);
+    doc.text(`Project: ${formData.projectName}`, 120, 60);
+    doc.text(`Location: ${formData.projectLocation}`, 120, 65);
+    doc.text(`Type: ${formData.projectType}`, 120, 70);
+    doc.text(`Start Date: ${formData.startDate}`, 120, 75);
+    doc.text(`Est. Completion: ${formData.estimatedCompletionDate}`, 120, 80);
+    
+    // Items table
+    doc.setFontSize(12);
+    doc.text("Items:", 20, 90);
+    
+    // Table headers
+    doc.setFillColor(240, 240, 240);
+    doc.rect(20, 95, 170, 7, "F");
+    doc.setFontSize(9);
+    doc.text("Description", 22, 100);
+    doc.text("Quantity", 100, 100);
+    doc.text("Unit Price", 125, 100);
+    doc.text("Total", 170, 100, { align: "right" });
+    
+    // Table rows
+    let y = 105;
+    formData.items.forEach((item, index) => {
+      doc.text(item.description, 22, y);
+      doc.text(item.quantity.toString(), 100, y);
+      doc.text(`${item.unitPrice.toFixed(2)}`, 125, y);
+      doc.text(`${(item.quantity * item.unitPrice).toFixed(2)}`, 170, y, { align: "right" });
+      y += 7;
+    });
+    
+    // Summary
+    y += 5;
+    doc.line(20, y, 190, y);
+    y += 5;
+    
+    doc.text("Subtotal:", 140, y);
+    doc.text(`${formData.subtotal.toFixed(2)}`, 170, y, { align: "right" });
+    y += 7;
+    
+    doc.text(`Tax (${formData.taxRate}%):`, 140, y);
+    doc.text(`${formData.taxAmount.toFixed(2)}`, 170, y, { align: "right" });
+    y += 7;
+    
+    if (formData.discount > 0) {
+      doc.text("Discount:", 140, y);
+      doc.text(`${formData.discount.toFixed(2)}`, 170, y, { align: "right" });
+      y += 7;
+    }
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("Total:", 140, y);
+    doc.text(`${formData.total.toFixed(2)}`, 170, y, { align: "right" });
+    
+    // Notes and terms
+    y += 15;
+    doc.setFontSize(10);
+    doc.setFont(undefined, "normal");
+    doc.text("Notes:", 20, y);
+    doc.text(formData.notes || "No additional notes.", 20, y + 5);
+    
+    y += 15;
+    doc.text("Terms & Conditions:", 20, y);
+    doc.text(formData.terms, 20, y + 5);
+    
+    // CAD file information if available
+    if (formData.cadFileName) {
+      y += 15;
+      doc.text("CAD File:", 20, y);
+      doc.text(`Filename: ${formData.cadFileName}`, 20, y + 5);
+    }
+    
+    // Save PDF
+    doc.save(`Quotation_${formData.projectName.replace(/\s+/g, '_')}.pdf`);
+  };
+
+  // Handle CAD file upload
+  const handleCadFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Check if file is a CAD file (DWG, DXF, etc.)
+    const validExtensions = ['.dwg', '.dxf', '.dwf', '.ifc'];
+    const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    
+    if (!validExtensions.includes(fileExtension)) {
+      alert("Please upload a valid CAD file (DWG, DXF, DWF, or IFC)");
+      return;
+    }
+    
+    setCadFile(file);
+    
+    // Mock CAD file parsing - in a real app, you'd use a CAD parsing library
+    // or send the file to a backend service for processing
+    mockParseCadFile(file);
+    
+    // Update form data with CAD file info
+    setFormData(prev => ({
+      ...prev,
+      cadFileName: file.name,
+      cadFileUrl: URL.createObjectURL(file)
+    }));
+  };
+  
+  // Mock function to parse CAD file and extract quantities
+  const mockParseCadFile = (file) => {
+    // In a real application, you would use a CAD parsing library or API
+    // This is just a mock to simulate the functionality
+    
+    // Simulate processing time
+    setTimeout(() => {
+      // Mock extracted data
+      const mockExtractedData = {
+        walls: Math.floor(Math.random() * 50) + 10,
+        doors: Math.floor(Math.random() * 15) + 5,
+        windows: Math.floor(Math.random() * 20) + 8,
+        floors: Math.floor(Math.random() * 5) + 1,
+        beams: Math.floor(Math.random() * 30) + 15,
+        columns: Math.floor(Math.random() * 20) + 10,
+        area: (Math.random() * 500 + 100).toFixed(2)
+      };
+      
+      setCadData(mockExtractedData);
+      
+      // Update form data with extracted quantities
+      setFormData(prev => ({
+        ...prev,
+        cadExtractedQuantities: mockExtractedData
+      }));
+      
+      // Optionally, add items based on extracted quantities
+      const newItems = [...formData.items];
+      
+      if (mockExtractedData.walls && !newItems.some(item => item.description.includes("Wall"))) {
+        newItems.push({
+          description: "Wall construction (per linear meter)",
+          quantity: mockExtractedData.walls,
+          unitPrice: 85,
+          total: mockExtractedData.walls * 85
+        });
+      }
+      
+      if (mockExtractedData.doors && !newItems.some(item => item.description.includes("Door"))) {
+        newItems.push({
+          description: "Door installation (standard size)",
+          quantity: mockExtractedData.doors,
+          unitPrice: 150,
+          total: mockExtractedData.doors * 150
+        });
+      }
+      
+      if (mockExtractedData.windows && !newItems.some(item => item.description.includes("Window"))) {
+        newItems.push({
+          description: "Window installation (standard size)",
+          quantity: mockExtractedData.windows,
+          unitPrice: 200,
+          total: mockExtractedData.windows * 200
+        });
+      }
+      
+      setFormData(prev => ({
+        ...prev,
+        items: newItems
+      }));
+      
+      setSuccessMessage("CAD file processed successfully!");
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+      
+    }, 1500);
+  };
+
+  // If loading, show loading spinner
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FF7420]"></div>
+      </div>
+    );
+  }
+
+  // If not logged in, redirect to login
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
+        <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Authentication Required</h2>
+          <p className="text-gray-600 mb-6">Please log in to access the quotation system.</p>
+          <button 
+            onClick={() => router.push("/auth/login")}
+            className="px-4 py-2 bg-[#FF7420] text-white rounded-lg hover:bg-[#FF7420]/90 transition-colors"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#FFFFFF] to-[#F8F9FA] text-[#191A19]">
-      {/* Header with User Button */}
-      <div className="flex justify-between items-center p-4 md:p-6">
-        <Link href="/" className="text-xl font-bold text-[#191A19] flex items-center">
-          <span className="text-[#FF7420]">Vithanage</span> Quotations
-        </Link>
-        <UserButton />
-      </div>
-      
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8 md:px-8 lg:px-16">
-        {/* Page Title */}
-        <div className="text-center mb-12">
-          <motion.h1 
-            className="text-4xl md:text-5xl font-bold mb-4 text-[#191A19]"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            Instant <span className="text-[#FF7420]">CAD</span> Quotations
-          </motion.h1>
-          <motion.p 
-            className="text-xl text-gray-600 max-w-3xl mx-auto"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            Upload your CAD files and get accurate cost estimates for your construction and woodworking projects in minutes.
-          </motion.p>
-        </div>
-        
-        {/* Progress Steps */}
-        <div className="mb-12">
-          <div className="flex justify-center">
-            <div className="flex items-center w-full max-w-3xl">
-              {["upload", "preview", "result"].map((step, index) => (
-                <div key={step} className="flex-1 relative">
-                  <div 
-                    className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center z-10 relative
-                      ${currentView === step ? 'bg-[#FF7420] text-white' : 
-                        (["upload", "preview"].includes(step) && currentView === "result") || 
-                        (step === "upload" && currentView === "preview") 
-                          ? 'bg-[#FF7420] text-white' : 'bg-gray-200 text-gray-500'}`}
-                  >
-                    {index + 1}
-                  </div>
-                  {index < 2 && (
-                    <div 
-                      className={`absolute top-5 w-full h-0.5 left-1/2 
-                        ${(index === 0 && (currentView === "preview" || currentView === "result")) || 
-                          (index === 1 && currentView === "result") 
-                            ? 'bg-[#FF7420]' : 'bg-gray-200'}`}
-                    ></div>
-                  )}
-                  <div className="text-center mt-2 text-sm font-medium">
-                    {step === "upload" && "Upload Files"}
-                    {step === "preview" && "Configure"}
-                    {step === "result" && "Get Quote"}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        {/* Content based on current view */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 mb-12">
-          {/* Upload View */}
-          {currentView === "upload" && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.4 }}
-            >
-              <div 
-                className={`border-2 border-dashed rounded-xl p-8 text-center ${
-                  dragActive ? 'border-[#FF7420] bg-[#FF7420]/5' : 'border-gray-300 bg-gray-50'
-                }`}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={handleChange}
-                  accept=".dwg,.dxf,.skp,.pdf"
-                  className="hidden"
-                />
-                
-                <div className="flex flex-col items-center justify-center py-6">
-                  <div className="mb-4">
-                    <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                    </svg>
-                  </div>
-                  <p className="mb-2 text-lg font-medium text-gray-700">
-                    Drag & drop your CAD files here
-                  </p>
-                  <p className="mb-4 text-sm text-gray-500">
-                    Supported formats: .DWG, .DXF, .SKP, .PDF
-                  </p>
-                  <button
-                    onClick={onButtonClick}
-                    className="px-6 py-3 bg-[#FF7420] text-white rounded-lg hover:bg-[#E56A1E] transition-colors font-medium"
-                  >
-                    Browse Files
-                  </button>
-                </div>
-              </div>
-              
-              <div className="mt-8">
-                <h3 className="text-lg font-medium mb-4">Why upload CAD files?</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-[#FF7420] mb-2">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                      </svg>
-                    </div>
-                    <h4 className="font-medium mb-1">Instant Quotes</h4>
-                    <p className="text-sm text-gray-600">Get accurate cost estimates in minutes, not days.</p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-[#FF7420] mb-2">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                      </svg>
-                    </div>
-                    <h4 className="font-medium mb-1">Detailed Breakdown</h4>
-                    <p className="text-sm text-gray-600">See material, labor, and overhead costs separately.</p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-[#FF7420] mb-2">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                      </svg>
-                    </div>
-                    <h4 className="font-medium mb-1">Timeline Estimates</h4>
-                    <p className="text-sm text-gray-600">Get projected timelines for your project completion.</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-          
-          {/* Preview View */}
-          {currentView === "preview" && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.4 }}
-            >
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* File List */}
-                <div className="lg:col-span-1">
-                  <h3 className="text-xl font-medium mb-4">Uploaded Files</h3>
-                  <div className="space-y-3 mb-6">
-                    {files.map((file, index) => (
-                      <div 
-                        key={index} 
-                        className={`flex items-center p-3 rounded-lg border ${
-                          file.isValid ? 'border-gray-200' : 'border-red-200 bg-red-50'
-                        }`}
-                      >
-                                             <div className="w-10 h-10 flex-shrink-0 mr-3">
-                          <Image 
-                            src={file.icon || fileIcons.default} 
-                            alt={file.extension} 
-                            width={40} 
-                            height={40}
-                            className="object-contain"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {file.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                          {!file.isValid && (
-                            <p className="text-xs text-red-500">
-                              Unsupported file format
-                            </p>
-                          )}
-                        </div>
-                        <button 
-                          onClick={() => removeFile(index)}
-                          className="ml-2 text-gray-400 hover:text-red-500"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <button
-                    onClick={onButtonClick}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium flex items-center justify-center"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
-                    Add More Files
-                  </button>
-                </div>
-                
-                {/* Material Options */}
-                <div className="lg:col-span-2">
-                  <h3 className="text-xl font-medium mb-4">Project Specifications</h3>
-                  
-                  <div className="space-y-6">
-                    {/* Wood Type */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Wood Type
-                      </label>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {[
-                          { id: 'teak', name: 'Teak', price: 'Premium', desc: 'Durable, water-resistant' },
-                          { id: 'mahogany', name: 'Mahogany', price: 'High', desc: 'Rich color, fine grain' },
-                          { id: 'oak', name: 'Oak', price: 'Standard', desc: 'Strong, versatile' }
-                        ].map((wood) => (
-                          <div 
-                            key={wood.id}
-                            onClick={() => setMaterialOptions({...materialOptions, woodType: wood.id})}
-                            className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                              materialOptions.woodType === wood.id 
-                                ? 'border-[#FF7420] bg-[#FF7420]/5 ring-1 ring-[#FF7420]' 
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium">{wood.name}</span>
-                              {materialOptions.woodType === wood.id && (
-                                <svg className="w-5 h-5 text-[#FF7420]" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                                </svg>
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              <p>Price: {wood.price}</p>
-                              <p>{wood.desc}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {/* Finish Type */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Finish Type
-                      </label>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {[
-                          { id: 'standard', name: 'Standard', price: 'Basic', desc: 'Clear coat finish' },
-                          { id: 'premium', name: 'Premium', price: 'Medium', desc: 'Stain + clear coat' },
-                          { id: 'luxury', name: 'Luxury', price: 'High', desc: 'Multiple coats, hand-rubbed' }
-                        ].map((finish) => (
-                          <div 
-                            key={finish.id}
-                            onClick={() => setMaterialOptions({...materialOptions, finishType: finish.id})}
-                            className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                              materialOptions.finishType === finish.id 
-                                ? 'border-[#FF7420] bg-[#FF7420]/5 ring-1 ring-[#FF7420]' 
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium">{finish.name}</span>
-                              {materialOptions.finishType === finish.id && (
-                                <svg className="w-5 h-5 text-[#FF7420]" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                                </svg>
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              <p>Price: {finish.price}</p>
-                              <p>{finish.desc}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {/* Hardware Grade */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Hardware Grade
-                      </label>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {[
-                          { id: 'standard', name: 'Standard', price: 'Basic', desc: 'Functional, basic quality' },
-                          { id: 'premium', name: 'Premium', price: 'Medium', desc: 'Better durability, aesthetics' },
-                          { id: 'luxury', name: 'Luxury', price: 'High', desc: 'Top quality, designer hardware' }
-                        ].map((hardware) => (
-                          <div 
-                            key={hardware.id}
-                            onClick={() => setMaterialOptions({...materialOptions, hardwareGrade: hardware.id})}
-                            className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                              materialOptions.hardwareGrade === hardware.id 
-                                ? 'border-[#FF7420] bg-[#FF7420]/5 ring-1 ring-[#FF7420]' 
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium">{hardware.name}</span>
-                              {materialOptions.hardwareGrade === hardware.id && (
-                                <svg className="w-5 h-5 text-[#FF7420]" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                                </svg>
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              <p>Price: {hardware.price}</p>
-                              <p>{hardware.desc}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-8 flex justify-between">
-                <button
-                  onClick={() => setCurrentView("upload")}
-                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={calculateQuotation}
-                  disabled={files.filter(f => f.isValid).length === 0 || isCalculating}
-                  className={`px-6 py-2 bg-[#FF7420] text-white rounded-lg transition-colors font-medium flex items-center ${
-                    files.filter(f => f.isValid).length === 0 || isCalculating
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'hover:bg-[#E56A1E]'
-                  }`}
-                >
-                  {isCalculating ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Calculating...
-                    </>
-                  ) : (
-                    'Calculate Quotation'
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          )}
-          
-          {/* Result View */}
-          {currentView === "result" && quotationResult && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.4 }}
-            >
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                  </svg>
-                </div>
-                <h3 className="text-2xl font-bold mb-2">Quotation Ready!</h3>
-                <p className="text-gray-600">
-                  We've analyzed your CAD files and prepared a detailed quotation
-                </p>
-              </div>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Summary Card */}
-                <div className="lg:col-span-1 bg-gradient-to-br from-[#FF7420] to-[#FF5722] text-white rounded-xl p-6 shadow-lg">
-                  <h3 className="text-xl font-bold mb-4">Quotation Summary</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-white/80 text-sm">Total Estimated Cost</p>
-                      <p className="text-3xl font-bold">{formatCurrency(quotationResult.totalCost)}</p>
-                    </div>
-                    <div>
-                      <p className="text-white/80 text-sm">Estimated Timeline</p>
-                      <p className="text-xl font-semibold">{quotationResult.timeline.estimatedDays} days</p>
-                    </div>
-                    <div className="pt-4 border-t border-white/20">
-                      <p className="text-white/80 text-sm mb-2">Cost Breakdown</p>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span>Materials</span>
-                          <span>{formatCurrency(quotationResult.breakdown.materials)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Labor</span>
-                          <span>{formatCurrency(quotationResult.breakdown.labor)}</span>
-                          </div>
-                        <div className="flex justify-between">
-                          <span>Overhead</span>
-                          <span>{formatCurrency(quotationResult.breakdown.overhead)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-6 pt-4 border-t border-white/20">
-                    <button className="w-full py-2 bg-white text-[#FF7420] rounded-lg font-medium hover:bg-white/90 transition-colors">
-                      Download PDF Quote
-                    </button>
-                  </div>
-                </div>
-                
-                {/* Details */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* Timeline */}
-                  <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
-                    <h3 className="text-lg font-bold mb-4">Project Timeline</h3>
-                    <div className="space-y-4">
-                      {quotationResult.timeline.phases.map((phase, index) => (
-                        <div key={index} className="relative">
-                          <div className="flex items-center mb-2">
-                            <div className="w-8 h-8 bg-[#FF7420]/10 rounded-full flex items-center justify-center text-[#FF7420] font-medium text-sm mr-3">
-                              {index + 1}
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="font-medium">{phase.name}</h4>
-                              <p className="text-sm text-gray-500">{phase.days} days</p>
-                            </div>
-                          </div>
-                          {index < quotationResult.timeline.phases.length - 1 && (
-                            <div className="absolute left-4 top-8 bottom-0 w-0.5 bg-gray-200"></div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* Materials Breakdown */}
-                  <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
-                    <h3 className="text-lg font-bold mb-4">Materials Breakdown</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-medium text-[#FF7420] mb-1">Wood</h4>
-                        <p className="text-sm mb-1">Type: {quotationResult.materials.wood.type}</p>
-                        <p className="text-sm mb-1">Quantity: {quotationResult.materials.wood.quantity}</p>
-                        <p className="text-sm font-medium">{formatCurrency(quotationResult.materials.wood.cost)}</p>
-                      </div>
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-medium text-[#FF7420] mb-1">Hardware</h4>
-                        <p className="text-sm mb-1">Grade: {quotationResult.materials.hardware.type}</p>
-                        <p className="text-sm mb-3">Includes fasteners, hinges, handles</p>
-                        <p className="text-sm font-medium">{formatCurrency(quotationResult.materials.hardware.cost)}</p>
-                      </div>
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-medium text-[#FF7420] mb-1">Finish</h4>
-                        <p className="text-sm mb-1">Type: {quotationResult.materials.finish.type}</p>
-                        <p className="text-sm mb-3">Includes stain, sealant, polish</p>
-                        <p className="text-sm font-medium">{formatCurrency(quotationResult.materials.finish.cost)}</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Next Steps */}
-                  <div className="bg-[#191A19] text-white rounded-xl p-6 shadow-md">
-                    <h3 className="text-lg font-bold mb-4">Next Steps</h3>
-                    <ul className="space-y-3">
-                      <li className="flex items-start">
-                        <svg className="w-5 h-5 text-[#FF7420] mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                        </svg>
-                        <span>Download your detailed quotation</span>
-                      </li>
-                      <li className="flex items-start">
-                        <svg className="w-5 h-5 text-[#FF7420] mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                        </svg>
-                        <span>Schedule a consultation with our experts</span>
-                      </li>
-                      <li className="flex items-start">
-                        <svg className="w-5 h-5 text-[#FF7420] mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
-                        </svg>
-                        <span>Finalize project details and sign contract</span>
-                      </li>
-                    </ul>
-                    <div className="mt-4 pt-4 border-t border-white/10 flex space-x-4">
-                      <Link href="/contact" className="px-4 py-2 bg-[#FF7420] text-white rounded-lg font-medium hover:bg-[#E56A1E] transition-colors">
-                        Contact Us
-                      </Link>
-                      <button className="px-4 py-2 border border-white/20 text-white rounded-lg font-medium hover:bg-white/10 transition-colors">
-                        Schedule Consultation
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-8 flex justify-between">
-                <button
-                  onClick={() => setCurrentView("preview")}
-                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
-                >
-                  Back to Configuration
-                </button>
-                <button
-                  onClick={() => {
-                    setFiles([]);
-                    setQuotationResult(null);
-                    setCurrentView("upload");
-                  }}
-                  className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
-                >
-                  Start New Quote
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </div>
-        
-        {/* Testimonials */}
-        <section className="py-12">
-          <h2 className="text-2xl font-bold mb-8 text-center">What Our Clients Say</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-[#FF7420]/20 rounded-full flex items-center justify-center text-[#FF7420] font-bold mr-3">
-                  SL
-                </div>
-                <div>
-                  <h4 className="font-medium">Samantha Liyanarachchi</h4>
-                  <p className="text-sm text-gray-500">Architect, SL Designs</p>
-                </div>
-              </div>
-              <p className="text-gray-600">
-                "The instant quotation system saved me hours of back-and-forth with contractors. The estimates were accurate and the breakdown helped me optimize my design costs."
-              </p>
-              <div className="mt-4 flex text-[#FF7420]">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <svg key={star} className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                  </svg>
-                ))}
-              </div>
-            </div>
-            
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-[#FF7420]/20 rounded-full flex items-center justify-center text-[#FF7420] font-bold mr-3">
-                  RP
-                </div>
-                <div>
-                  <h4 className="font-medium">Rajitha Perera</h4>
-                  <p className="text-sm text-gray-500">Interior Designer</p>
-                </div>
-              </div>
-              <p className="text-gray-600">
-                "As an interior designer, I need quick estimates for custom furniture. This tool gives me accurate quotes that I can immediately share with clients. Highly recommended!"
-              </p>
-              <div className="mt-4 flex text-[#FF7420]">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <svg key={star} className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                  </svg>
-                ))}
-              </div>
-            </div>
-            
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-[#FF7420]/20 rounded-full flex items-center justify-center text-[#FF7420] font-bold mr-3">
-                  KF
-                </div>
-                <div>
-                  <h4 className="font-medium">Kamal Fernando</h4>
-                  <p className="text-sm text-gray-500">Property Developer</p>
-                </div>
-              </div>
-              <p className="text-gray-600">
-                "The detailed breakdown of materials, labor, and timeline has been invaluable for our multi-unit development projects. It's made budgeting much more precise."
-              </p>
-              <div className="mt-4 flex text-[#FF7420]">
-                {[1, 2, 3, 4, 5].map((star, idx) => (
-                  <svg key={star} className={`w-5 h-5 ${idx === 4 ? 'text-gray-300' : ''}`} fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                  </svg>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-        
-        {/* FAQ Section */}
-        <section className="py-12">
-          <h2 className="text-2xl font-bold mb-8 text-center">Frequently Asked Questions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <h3 className="font-bold text-lg mb-2">What CAD file formats do you support?</h3>
-              <p className="text-gray-600">We support industry-standard formats including .DWG, .DXF, .SKP (SketchUp), and PDF drawings. If you have a different format, please contact us.</p>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <h3 className="font-bold text-lg mb-2">How accurate are the quotations?</h3>
-              <p className="text-gray-600">Our quotations are typically within 5-10% of the final cost, depending on project complexity. We use advanced algorithms to analyze your CAD files for precise material calculations.</p>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <h3 className="font-bold text-lg mb-2">Can I modify my quotation after receiving it?</h3>
-              <p className="text-gray-600">Yes! You can adjust material selections, quantities, and other parameters. Each change will update your quote in real-time.</p>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <h3 className="font-bold text-lg mb-2">Is my CAD file data secure?</h3>
-              <p className="text-gray-600">Absolutely. We use enterprise-grade encryption for all uploaded files. Your designs and project details are never shared with third parties without your explicit permission.</p>
-            </div>
-          </div>
-        </section>
-      </main>
-      
-      {/* Footer */}
-      <footer className="py-8 px-4 md:px-8 lg:px-16 bg-gray-800 text-white">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="mb-4 md:mb-0">
-              <h3 className="text-xl font-bold">Vithanage Group</h3>
-              <p className="text-gray-400">Construction Management System</p>
-            </div>
+    <div className="min-h-screen bg-gray-100">
+      {/* Header */}
+      <div className="bg-white shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-gray-800">Quotation System</h1>
             <div className="flex space-x-4">
-              <Link href="/about" className="text-gray-300 hover:text-white transition-colors">About</Link>
-              <Link href="/services" className="text-gray-300 hover:text-white transition-colors">Services</Link>
-              <Link href="/contact" className="text-gray-300 hover:text-white transition-colors">Contact</Link>
+              <button 
+                onClick={() => {
+                  setActiveTab("create");
+                  if (!isEditMode) resetForm();
+                }}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  activeTab === "create" 
+                    ? "bg-[#FF7420] text-white" 
+                    : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                }`}
+              >
+                <FiPlus className="inline mr-2" />
+                {isEditMode ? "Edit Quotation" : "Create Quotation"}
+              </button>
+              <button 
+                onClick={() => setActiveTab("list")}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  activeTab === "list" 
+                    ? "bg-[#FF7420] text-white" 
+                    : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                }`}
+              >
+                <FiList className="inline mr-2" />
+                View Quotations
+              </button>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t border-gray-700 text-center text-gray-400">
-            <p>© {new Date().getFullYear()} Vithanage Group. All rights reserved.</p>
-          </div>
         </div>
-      </footer>
-    </div>
-  );
-}
+      </div>
+
+      {/* Success Message */}
+      {showSuccessMessage && (
+        <motion.div 
+          initial={{ opacity: 0, y: -50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50"
+        >
+          {successMessage}
+        </motion.div>
+      )}
+
+            {/* Main Content */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === "create" ? (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">
+              {isEditMode ? "Edit Quotation" : "Create New Quotation"}
+            </h2>
+            
+            <form onSubmit={handleSubmit}>
+              {/* Client Information */}
+              <div className="mb-8">
+                <h3 className="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">Client Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-gray-700 mb-2">Client Name *</label>
+                    <input
+                      type="text"
+                      name="clientName"
+                      value={formData.clientName}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420] ${
+                        errors.clientName ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.clientName && <p className="text-red-500 text-sm mt-1">{errors.clientName}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">Email</label>
+                    <input
+                      type="email"
+                      name="clientEmail"
+                      value={formData.clientEmail}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">Phone</label>
+                    <input
+                      type="text"
+                      name="clientPhone"
+                      value={formData.clientPhone}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420]"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Project Information */}
+              <div className="mb-8">
+                <h3 className="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">Project Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                  <div>
+                    <label className="block text-gray-700 mb-2">Project Name *</label>
+                    <input
+                      type="text"
+                      name="projectName"
+                      value={formData.projectName}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420] ${
+                        errors.projectName ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.projectName && <p className="text-red-500 text-sm mt-1">{errors.projectName}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">Project Location *</label>
+                    <input
+                      type="text"
+                      name="projectLocation"
+                      value={formData.projectLocation}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420] ${
+                        errors.projectLocation ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.projectLocation && <p className="text-red-500 text-sm mt-1">{errors.projectLocation}</p>}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                  <div>
+                    <label className="block text-gray-700 mb-2">Project Type</label>
+                    <select
+                      name="projectType"
+                      value={formData.projectType}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420]"
+                    >
+                      <option value="construction">Construction</option>
+                      <option value="renovation">Renovation</option>
+                      <option value="woodwork">Woodwork</option>
+                      <option value="timber">Timber Supply</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">Start Date *</label>
+                    <input
+                      type="date"
+                      name="startDate"
+                      value={formData.startDate}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420] ${
+                        errors.startDate ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.startDate && <p className="text-red-500 text-sm mt-1">{errors.startDate}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">Estimated Completion *</label>
+                    <input
+                      type="date"
+                      name="estimatedCompletionDate"
+                      value={formData.estimatedCompletionDate}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420] ${
+                        errors.estimatedCompletionDate ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {errors.estimatedCompletionDate && <p className="text-red-500 text-sm mt-1">{errors.estimatedCompletionDate}</p>}
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-gray-700 mb-2">Project Description</label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    rows="3"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420]"
+                  ></textarea>
+                </div>
+              </div>
+
+              {/* CAD File Upload */}
+              <div className="mb-8">
+                <h3 className="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">CAD File Upload</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-gray-600 mb-3">
+                      Upload a CAD file (DWG, DXF, DWF, or IFC) to automatically extract quantities for your quotation.
+                    </p>
+                    <div className="flex items-center space-x-4">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current.click()}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+                      >
+                        <FiUpload className="mr-2" /> Upload CAD File
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".dwg,.dxf,.dwf,.ifc"
+                        onChange={handleCadFileUpload}
+                        className="hidden"
+                      />
+                      {formData.cadFileName && (
+                        <span className="text-sm text-gray-600 flex items-center">
+                          <FiFile className="mr-1" /> {formData.cadFileName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {cadData && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <h4 className="font-medium text-gray-800 mb-2">Extracted Quantities</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(cadData).map(([key, value]) => (
+                          <div key={key} className="flex justify-between">
+                            <span className="text-gray-600 capitalize">{key}:</span>
+                            <span className="font-medium">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <p className="text-sm text-gray-500">
+                          These quantities have been automatically added to your quotation items.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Items */}
+              <div className="mb-8">
+                <h3 className="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">Items</h3>
+                
+                {errors.items && <p className="text-red-500 text-sm mb-2">{errors.items}</p>}
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full mb-4">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="px-4 py-2 text-left">Description</th>
+                        <th className="px-4 py-2 text-right">Quantity</th>
+                        <th className="px-4 py-2 text-right">Unit Price ($)</th>
+                        <th className="px-4 py-2 text-right">Total ($)</th>
+                        <th className="px-4 py-2 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.items.map((item, index) => (
+                        <tr key={index} className="border-b">
+                          <td className="px-4 py-2">
+                            <input
+                              type="text"
+                              value={item.description}
+                              onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                              className={`w-full px-3 py-1 border rounded focus:outline-none focus:ring-1 focus:ring-[#FF7420] ${
+                                errors[`item_${index}_description`] ? "border-red-500" : "border-gray-300"
+                              }`}
+                              placeholder="Item description"
+                            />
+                            {errors[`item_${index}_description`] && (
+                              <p className="text-red-500 text-xs mt-1">{errors[`item_${index}_description`]}</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-2">
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                              className="w-full px-3 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-[#FF7420]"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.unitPrice}
+                              onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
+                              className="w-full px-3 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-[#FF7420]"
+                            />
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            ${(item.quantity * item.unitPrice).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeItem(index)}
+                              className="text-red-500 hover:text-red-700"
+                              disabled={formData.items.length === 1}
+                            >
+                              <FiTrash2 />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors flex items-center"
+                >
+                  <FiPlus className="mr-2" /> Add Item
+                </button>
+              </div>
+              
+              {/* Summary */}
+              <div className="mb-8">
+                <h3 className="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">Summary</h3>
+                <div className="flex flex-col items-end">
+                  <div className="w-full md:w-1/3 space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-gray-700">Subtotal:</span>
+                      <span>${formData.subtotal.toFixed(2)}</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-700">Tax Rate (%):</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        name="taxRate"
+                        value={formData.taxRate}
+                        onChange={handleNumericChange}
+                        className="w-20 px-2 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-[#FF7420]"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between">
+                      <span className="text-gray-700">Tax Amount:</span>
+                      <span>${formData.taxAmount.toFixed(2)}</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-700">Discount ($):</span>
+                      <input
+                        type="number"
+                        min="0"
+                        name="discount"
+                        value={formData.discount}
+                        onChange={handleNumericChange}
+                        className="w-20 px-2 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-1 focus:ring-[#FF7420]"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between font-bold text-lg pt-2 border-t">
+                      <span>Total:</span>
+                      <span>${formData.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Notes & Terms */}
+              <div className="mb-8">
+                <h3 className="text-xl font-semibold text-gray-700 mb-4 pb-2 border-b">Additional Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-gray-700 mb-2">Notes</label>
+                    <textarea
+                      name="notes"
+                      value={formData.notes}
+                      onChange={handleInputChange}
+                      rows="4"
+                      placeholder="Additional notes or special instructions..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420]"
+                    ></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-2">Terms & Conditions</label>
+                    <textarea
+                      name="terms"
+                      value={formData.terms}
+                      onChange={handleInputChange}
+                      rows="4"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7420]"
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-4">
+                {isEditMode && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="px-6 py-3 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition-colors"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={generatePDF}
+                  className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors flex items-center"
+                >
+                  <FiDownload className="mr-2" /> Download PDF
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-[#FF7420] text-white rounded-lg hover:bg-[#FF7420]/90 transition-colors flex items-center"
+                >
+                  <FiSave className="mr-2" /> {isEditMode ? "Update Quotation" : "Save Quotation"}
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Quotation List</h2>
+            
+            {quotations.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">No quotations found</p>
+                <button
+                  onClick={() => setActiveTab("create")}
+                  className="px-4 py-2 bg-[#FF7420] text-white rounded-lg hover:bg-[#FF7420]/90 transition-colors"
+                >
+                  Create Your First Quotation
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left">Client</th>
+                      <th className="px-4 py-2 text-left">Project</th>
+                      <th className="px-4 py-2 text-right">Total</th>
+                      <th className="px-4 py-2 text-center">Status</th>
+                      <th className="px-4 py-2 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quotations.map((quotation) => (
+                      <tr key={quotation._id} className="border-b hover:bg-gray-50">
+                        <td className="px-4 py-3 text-left">
+                          {new Date(quotation.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-left">{quotation.clientName}</td>
+                        <td className="px-4 py-3 text-left">{quotation.projectName}</td>
+                        <td className="px-4 py-3 text-right">${quotation.total.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="relative inline-block">
+                            <select
+                              value={quotation.status}
+                              onChange={(e) => handleStatusUpdate(quotation._id, e.target.value)}
+                              className={`px-2 py-1 rounded-full text-xs appearance-none cursor-pointer pr-6 ${
+                                quotation.status === 'approved' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : quotation.status === 'rejected' 
+                                    ? 'bg-red-100 text-red-800' 
+                                    : 'bg-yellow-100 text-yellow-800'
+                              }`}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="approved">Approved</option>
+                              <option value="rejected">Rejected</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                              </svg>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex justify-center space-x-3">
+                            <button
+                              onClick={() => handleEdit(quotation)}
+                              className="text-blue-500 hover:text-blue-700"
+                              title="Edit"
+                            >
+                              <FiEdit size={18} />
+                            </button>
+                            <button
+                                                            onClick={() => handleDelete(quotation._id)}
+                                                            className="text-red-500 hover:text-red-700"
+                                                            title="Delete"
+                                                          >
+                                                            <FiTrash2 size={18} />
+                                                          </button>
+                                                          <button
+                                                            onClick={() => {
+                                                              handleEdit(quotation);
+                                                              setTimeout(() => generatePDF(), 100);
+                                                            }}
+                                                            className="text-green-500 hover:text-green-700"
+                                                            title="Download PDF"
+                                                          >
+                                                            <FiDownload size={18} />
+                                                          </button>
+                                                        </div>
+                                                      </td>
+                                                    </tr>
+                                                  ))}
+                                                </tbody>
+                                              </table>
+                                            </div>
+                                          )}
+                                          
+                                          {/* Pagination - can be implemented if needed */}
+                                          {quotations.length > 0 && (
+                                            <div className="mt-6 flex justify-between items-center">
+                                              <div className="text-sm text-gray-500">
+                                                Showing {quotations.length} quotations
+                                              </div>
+                                              <div className="flex space-x-2">
+                                                <button className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-gray-700">
+                                                  Previous
+                                                </button>
+                                                <button className="px-3 py-1 bg-[#FF7420] rounded text-white">
+                                                  1
+                                                </button>
+                                                <button className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-gray-700">
+                                                  Next
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* CAD File Viewer Modal - can be implemented if needed */}
+                                    {/* This would be a modal that shows the CAD file preview */}
+                                    
+                                    {/* Footer */}
+                                    <div className="bg-white shadow-md mt-8">
+                                      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                                        <div className="flex justify-between items-center">
+                                          <p className="text-gray-500 text-sm">
+                                            © {new Date().getFullYear()} Vithanage Group. All rights reserved.
+                                          </p>
+                                          <div className="text-sm text-gray-500">
+                                            Construction Management System
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              

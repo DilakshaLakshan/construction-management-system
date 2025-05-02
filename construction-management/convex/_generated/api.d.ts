@@ -16,6 +16,7 @@ import type {
 import type * as auth from "../auth.js";
 import type * as authActions from "../authActions.js";
 import type * as feedback from "../feedback.js";
+import type * as quotations from "../quotations.js";
 import type * as sellTimbet from "../sellTimbet.js";
 import type * as timber from "../timber.js";
 import type * as users from "../users.js";
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   authActions: typeof authActions;
   feedback: typeof feedback;
+  quotations: typeof quotations;
   sellTimbet: typeof sellTimbet;
   timber: typeof timber;
   users: typeof users;
