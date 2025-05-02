@@ -10,9 +10,9 @@ export const addPayroll = mutation({
     bonus: v.number(),
     totalPay: v.number(),
     paid: v.boolean(),
-    otHours: v.number(), // New
-    epf: v.number(),      // New
-    etf: v.number(),      // New
+    otHours: v.number(), 
+    epf: v.number(),      
+    etf: v.number(),      
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("payroll", args);
@@ -33,9 +33,9 @@ export const updatePayroll = mutation({
     bonus: v.number(),
     totalPay: v.number(),
     paid: v.boolean(),
-    otHours: v.number(), // New
-    epf: v.number(),      // New
-    etf: v.number(),      // New
+    otHours: v.number(), 
+    epf: v.number(),      
+    etf: v.number(),      
   },
   handler: async (ctx, args) => {
     const { id, ...rest } = args;

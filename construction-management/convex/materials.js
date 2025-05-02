@@ -9,7 +9,7 @@ export const addMaterials = mutation({
     clientLocation: v.string(),
     description: v.string(),
     totalCost: v.number(),
-    payment: v.boolean(), // Include payment in create
+    payment: v.boolean(), 
     items: v.array(
       v.object({
         name: v.string(),
@@ -47,7 +47,7 @@ export const updateMaterials = mutation({
     clientLocation: v.string(),
     description: v.string(),
     totalCost: v.number(),
-    payment: v.boolean(), // Include payment in update
+    payment: v.boolean(), 
     items: v.array(
       v.object({
         name: v.string(),
