@@ -1,25 +1,75 @@
+"use client";
 import Image from "next/image";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "/components/ui/tabs.jsx";
 import ClientImage from "/components/ClientImage";
+import { useEffect, useState } from "react";
+import { FiUser } from "react-icons/fi";
 
 export default function Home() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      // Validate the token
+      const validateToken = async () => {
+        try {
+          const response = await fetch("/api/auth/validate", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ token }),
+          });
+          
+          const data = await response.json();
+          setIsLoggedIn(data.success);
+        } catch (error) {
+          console.error("Error validating token:", error);
+          setIsLoggedIn(false);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      validateToken();
+    } else {
+      setIsLoggedIn(false);
+      setLoading(false);
+    }
+  }, []);
   return (
-    <div className="min-h-screen bg-[#FFFFFF]   text-[#191A19]">
+    <div className="min-h-screen bg-[#FFFFFF] text-[#191A19]">
       <div className="flex justify-end p-4">
         <div className="flex gap-4">
-          <Link 
-            href="/auth/login" 
-            className="px-4 py-2 bg-[#FF7420] text-white rounded-lg hover:bg-[#FF7420]/90 transition-colors"
-          >
-            Login
-          </Link>
-          <Link 
-            href="/auth/register" 
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-          >
-            Register
-          </Link>
+          {loading ? (
+            <div className="animate-pulse h-10 w-20 bg-gray-200 rounded-lg"></div>
+          ) : isLoggedIn ? (
+            <Link 
+              href="/profile" 
+              className="flex items-center justify-center w-10 h-10 bg-[#FF7420] text-white rounded-full hover:bg-[#FF7420]/90 transition-colors"
+            >
+              <FiUser size={20} />
+            </Link>
+          ) : (
+            <>
+              <Link 
+                href="/auth/login" 
+                className="px-4 py-2 bg-[#FF7420] text-white rounded-lg hover:bg-[#FF7420]/90 transition-colors"
+              >
+                Login
+              </Link>
+              <Link 
+                href="/auth/register" 
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Register
+              </Link>
+            </>
+          )}
         </div>
       </div>
       
